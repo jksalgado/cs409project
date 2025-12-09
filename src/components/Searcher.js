@@ -4,6 +4,9 @@ import { generateSongs } from "./utils";
 import DropdownOption from "./DropdownOption";
 import "./Searcher.css";
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:5001";
+
 const MOCK_TRACKS = [
   {
     id: "s1",
@@ -260,7 +263,7 @@ function Searcher(props) {
 
       const spotifyUserId = userResponse.data.id;
 
-      await axios.post("http://localhost:5001/api/save-mix", {
+      await axios.post(`${API_BASE_URL}/api/save-mix`, {
         spotify_user_id: spotifyUserId,
         seed_track_id: selectedTrack.id,
         seed_track_name: selectedTrack.name,
@@ -297,7 +300,7 @@ function Searcher(props) {
       const spotifyUserId = userResponse.data.id;
 
       const mixesRes = await axios.get(
-        `http://localhost:5001/api/mixes/${spotifyUserId}`
+        `${API_BASE_URL}/api/save-mix/api/mixes/${spotifyUserId}`
       );
 
       setSavedMixes(mixesRes.data.mixes || []);
@@ -313,7 +316,7 @@ function Searcher(props) {
   const handleLoadMix = async (mix) => {
     try {
       const songsRes = await axios.get(
-        `http://localhost:5001/api/mixes/${mix.id}/songs`
+        `${API_BASE_URL}/api/save-mix/api/mixes/${mix.id}/songs`
       );
 
       const rows = songsRes.data.songs || [];
