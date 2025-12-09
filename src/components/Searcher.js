@@ -45,6 +45,10 @@ function Searcher(props) {
   const [likedSongs, setLikedSongs] = useState([]);
   const [likedOpen, setLikedOpen] = useState(true);
 
+  // NEW: saved mixes from DB
+  const [savedMixes, setSavedMixes] = useState([]);
+  const [isLoadingMixes, setIsLoadingMixes] = useState(false);
+
   const access_token = props.token;
 
   const searchSong = async () => {
@@ -106,12 +110,20 @@ function Searcher(props) {
     if (!selectedTrack) return;
 
     try {
-      const songs = await generateSongs(selectedTrack, moodSettings, access_token);
+      const songs = await generateSongs(
+        selectedTrack,
+        moodSettings,
+        access_token
+      );
       setGeneratedSongs(songs);
       setLikedSongs([]);
     } catch (e) {
       console.error("Error generating songs:", e);
-      alert(`Failed to generate recommendations: ${e.response?.data?.error?.message || e.message}`);
+      alert(
+        `Failed to generate recommendations: ${
+          e.response?.data?.error?.message || e.message
+        }`
+      );
     }
   };
 
@@ -145,7 +157,7 @@ function Searcher(props) {
     // Prompt user for playlist name
     const defaultName = `Cadence Mix - ${new Date().toLocaleDateString()}`;
     const playlistName = prompt("Enter a name for your playlist:", defaultName);
-    
+
     // If user cancels, don't create playlist
     if (!playlistName || playlistName.trim() === "") {
       return;
@@ -166,7 +178,8 @@ function Searcher(props) {
         `https://api.spotify.com/v1/users/${userId}/playlists`,
         {
           name: playlistName,
-          description: "Created with Cadence - Your personalized music generator",
+          description:
+            "Created with Cadence - Your personalized music generator",
           public: false,
         },
         {
@@ -194,23 +207,138 @@ function Searcher(props) {
         }
       );
 
-      alert(`Playlist "${playlistName}" created successfully with ${likedSongs.length} songs`);
-      
+      alert(
+        `Playlist "${playlistName}" created successfully with ${likedSongs.length} songs`
+      );
+
       // Optional: Clear liked songs after creating playlist
       setLikedSongs([]);
     } catch (error) {
       console.error("Error creating playlist:", error);
       console.error("Error response:", error.response?.data);
       console.error("Error status:", error.response?.status);
-      
+
       if (error.response?.status === 401) {
         alert("Your session has expired. Please log out and log back in.");
       } else if (error.response?.status === 403) {
-        alert("Missing permissions. Please log out and log back in to grant playlist creation access.");
+        alert(
+          "Missing permissions. Please log out and log back in to grant playlist creation access."
+        );
       } else {
         const errorMsg = error.response?.data?.error?.message || error.message;
         alert(`Failed to create playlist: ${errorMsg}`);
       }
+    }
+  };
+
+  // Save current mix (liked songs if any, otherwise all generated songs) to Neon via backend
+  const handleSaveMix = async () => {
+    if (!selectedTrack) {
+      alert("Pick a seed track first.");
+      return;
+    }
+
+    if (!access_token) {
+      alert("Please log in with Spotify first.");
+      return;
+    }
+
+    const songsToSave = likedSongs.length > 0 ? likedSongs : generatedSongs;
+
+    if (songsToSave.length === 0) {
+      alert("Generate some songs or like a few before saving.");
+      return;
+    }
+
+    try {
+      // Get Spotify user id
+      const userResponse = await axios.get("https://api.spotify.com/v1/me", {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+
+      const spotifyUserId = userResponse.data.id;
+
+      await axios.post("http://localhost:5001/api/save-mix", {
+        spotify_user_id: spotifyUserId,
+        seed_track_id: selectedTrack.id,
+        seed_track_name: selectedTrack.name,
+        energy: moodSettings.energy,
+        danceability: moodSettings.danceability,
+        valence: moodSettings.valence,
+        songs: songsToSave,
+      });
+
+      alert("Mix saved to database ✅");
+    } catch (err) {
+      console.error("Error saving mix:", err);
+      console.error("Backend response:", err.response?.data);
+      alert("Failed to save mix");
+    }
+  };
+
+  // NEW: fetch saved mixes for current Spotify user
+  const fetchSavedMixes = async () => {
+    if (!access_token) {
+      alert("Please log in with Spotify first.");
+      return;
+    }
+
+    try {
+      setIsLoadingMixes(true);
+
+      const userResponse = await axios.get("https://api.spotify.com/v1/me", {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+
+      const spotifyUserId = userResponse.data.id;
+
+      const mixesRes = await axios.get(
+        `http://localhost:5001/api/mixes/${spotifyUserId}`
+      );
+
+      setSavedMixes(mixesRes.data.mixes || []);
+    } catch (err) {
+      console.error("Error loading mixes:", err);
+      alert("Failed to load saved mixes");
+    } finally {
+      setIsLoadingMixes(false);
+    }
+  };
+
+  // NEW: load a mix from DB into mood sliders + liked songs
+  const handleLoadMix = async (mix) => {
+    try {
+      const songsRes = await axios.get(
+        `http://localhost:5001/api/mixes/${mix.id}/songs`
+      );
+
+      const rows = songsRes.data.songs || [];
+
+      // Map DB rows into the format used by generatedSongs / likedSongs
+      const mappedSongs = rows.map((row) => ({
+        id: row.spotify_track_id,
+        title: row.title,
+        artist: row.artist,
+        imageUrl: "",
+        duration: "",
+      }));
+
+      setMoodSettings({
+        energy: Number(mix.energy),
+        danceability: Number(mix.danceability),
+        valence: Number(mix.valence),
+      });
+
+      setGeneratedSongs(mappedSongs);
+      setLikedSongs(mappedSongs);
+      setLikedOpen(true);
+    } catch (err) {
+      console.error("Error loading mix songs:", err);
+      alert("Failed to load mix songs");
     }
   };
 
@@ -549,12 +677,8 @@ function Searcher(props) {
                       )}
 
                       <div className="generated-text">
-                        <div className="generated-song-title">
-                          {song.title}
-                        </div>
-                        <div className="generated-artist">
-                          {song.artist}
-                        </div>
+                        <div className="generated-song-title">{song.title}</div>
+                        <div className="generated-artist">{song.artist}</div>
                         {song.duration && (
                           <div className="generated-duration">
                             {song.duration}
@@ -635,9 +759,7 @@ function Searcher(props) {
                             />
                           )}
                           <div className="liked-item-text">
-                            <div className="liked-item-title">
-                              {song.title}
-                            </div>
+                            <div className="liked-item-title">{song.title}</div>
                             <div className="liked-item-artist">
                               {song.artist}
                             </div>
@@ -655,12 +777,92 @@ function Searcher(props) {
                 onClick={handleCreatePlaylist}
                 disabled={likedSongs.length === 0}
               >
-
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="playlist-icon"
+                  style={{ width: "20px", height: "20px", marginRight: "8px" }}
+                >
+                  <path
+                    d="M12 3v18M3 12h18"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
                 Generate Playlist
+              </button>
+
+              <button
+                type="button"
+                className="liked-generate-playlist"
+                onClick={handleSaveMix}
+                disabled={
+                  !selectedTrack ||
+                  (generatedSongs.length === 0 && likedSongs.length === 0)
+                }
+              >
+                💾 Save Mix to Database
               </button>
             </section>
           </div>
         )}
+
+        {/* Saved mixes from database */}
+        {/* Saved mixes from database */}
+        <section className="saved-mixes-section">
+          <header className="saved-mixes-header">
+            <div className="saved-mixes-header-left">
+              <div className="saved-mixes-icon">📂</div>
+              <div>
+                <div className="saved-mixes-title">Saved Mixes</div>
+                <div className="saved-mixes-subtitle">
+                  Previously liked songs saved to Neon
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="saved-mixes-refresh"
+              onClick={fetchSavedMixes}
+              disabled={isLoadingMixes}
+            >
+              {isLoadingMixes ? "Loading..." : "Refresh"}
+            </button>
+          </header>
+
+          {savedMixes.length === 0 ? (
+            <div className="saved-mixes-empty">
+              <p>No mixes saved yet</p>
+              <span>Save a mix, then refresh to see it here.</span>
+            </div>
+          ) : (
+            <ul className="saved-mixes-list">
+              {savedMixes.map((mix) => (
+                <li key={mix.id} className="saved-mix-item">
+                  <div className="saved-mix-main">
+                    <div className="saved-mix-name">
+                      {mix.seed_track_name || "Saved Mix"}
+                    </div>
+                    <div className="saved-mix-meta">
+                      Energy {Math.round(mix.energy * 100)}% · Dance{" "}
+                      {Math.round(mix.danceability * 100)}% · Mood{" "}
+                      {Math.round(mix.valence * 100)}%
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="saved-mix-load"
+                    onClick={() => handleLoadMix(mix)}
+                  >
+                    Load mix
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

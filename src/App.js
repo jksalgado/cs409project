@@ -7,10 +7,14 @@ import "./App.css";
 
 function App() {
   const CLIENT_ID = process.env.REACT_APP_SPOTIFY_CLIENT_ID || "";
-  const REDIRECT_URI = process.env.REACT_APP_SPOTIFY_REDIRECT_URI || "http://127.0.0.1:5002/callback";
+  const REDIRECT_URI =
+    process.env.REACT_APP_SPOTIFY_REDIRECT_URI ||
+    "http://127.0.0.1:5002/callback";
   const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
 
-  const [token, setToken] = useState(() => localStorage.getItem("spotify_token") || "");
+  const [token, setToken] = useState(
+    () => localStorage.getItem("spotify_token") || ""
+  );
 
   const logout = () => {
     setToken("");
@@ -22,7 +26,7 @@ function App() {
       "user-read-private",
       "user-read-email",
       "playlist-modify-public",
-      "playlist-modify-private"
+      "playlist-modify-private",
     ].join(" ");
     const authorizeUrl = `${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
@@ -48,7 +52,11 @@ function App() {
                     </div>
                     <div className="login-container">
                       <div className="cadence-logo">
-                        <img src="/logo-bg-removed.png" alt="Cadence" className="cadence-logo-img" />
+                        <img
+                          src="/logo-bg-removed.png"
+                          alt="Cadence"
+                          className="cadence-logo-img"
+                        />
                       </div>
                       <button className="login-btn" onClick={handleLogin}>
                         Login with Spotify
