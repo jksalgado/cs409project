@@ -300,7 +300,7 @@ function Searcher(props) {
       const spotifyUserId = userResponse.data.id;
 
       const mixesRes = await axios.get(
-        `${API_BASE_URL}/api/save-mix/api/mixes/${spotifyUserId}`
+        `${API_BASE_URL}/api/mixes/${spotifyUserId}`
       );
 
       setSavedMixes(mixesRes.data.mixes || []);
@@ -316,7 +316,7 @@ function Searcher(props) {
   const handleLoadMix = async (mix) => {
     try {
       const songsRes = await axios.get(
-        `${API_BASE_URL}/api/save-mix/api/mixes/${mix.id}/songs`
+        `${API_BASE_URL}/api/mixes/${mix.id}/songs`
       );
 
       const rows = songsRes.data.songs || [];
